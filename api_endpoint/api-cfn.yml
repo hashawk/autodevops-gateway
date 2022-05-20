@@ -1,0 +1,98 @@
+Description:
+  This template deploys the API Gateway and Lambda to send a "Hello, Adobe!" message.
+  Also contains the Roles and Permissions for the Api to invoke the lambda
+
+Parameters:
+  DevSecOpsVPC:
+    Description: VPC Id for the Environment to run
+    Type: String
+    Default: vpc-87878787878787878
+  PrivateSubnet1:
+    Description: Please enter the first private subnet in the first Availability Zone
+    Type: String
+    Default: subnet-87878787878787878
+  PrivateSubnet2:
+    Description: Please enter the second private subnet in the second Availability Zone
+    Type: String
+    Default: subnet-87878787878787878
+  SecurityGroup:
+    Description: Please enter the internal security group id for the environment
+    Type: String
+    Default: sg-87878787878787878
+
+Resources:
+  MessageAdobeApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: DevOpsApiGateway
+      Description: Message Testing API
+      ProtocolType: HTTP
+      Target: !GetAtt MessageLambda.Arn
+
+  LambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref MessageLambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+
+  MessageLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Description: Sends a message back to the client
+      Handler: index.lambda_handler
+      Runtime: python3.7
+      Role: !GetAtt DevOpsLambdaRole.Arn
+      Timeout: 300
+      MemorySize: 128
+      VpcConfig:
+        SecurityGroupIds: 
+          - !Ref SecurityGroup
+        SubnetIds:
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
+      Code:
+        ZipFile: |
+          import boto3
+          import json
+          def lambda_handler(event, context):
+              return messenger("Hello, Adobe!")
+              
+          def messenger(message):
+              return {
+                  'statusCode': 200,
+                  'headers': {
+                      'Content-Type': 'application/json'
+                  },
+                  'body': json.dumps(message)
+              }
+  DevOpsLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - apigateway.amazonaws.com
+                - lambda.amazonaws.com
+                - codebuild.amazonaws.com
+                - ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns: 
+        - arn:aws:iam::aws:policy/AWSLambdaFullAccess
+      Policies:
+        - PolicyName: "DevOpsLambdaPolicy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+                Effect: "Allow"
+                Action:
+                  - lambda:InvokeFunction
+                  - ec2:DescribeNetworkInterfaces
+                  - ec2:CreateNetworkInterface
+                  - ec2:DeleteNetworkInterface
+                  - ec2:DescribeInstances
+                  - ec2:AttachNetworkInterface
+                Resource: "*"
